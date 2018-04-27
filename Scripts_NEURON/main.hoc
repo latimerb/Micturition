@@ -7,7 +7,7 @@
 dt = 0.05
 steps_per_ms = 20
 v_init = -53.5
-tstop = 10000
+tstop = 30000
 
 objref pc, cellslist, cell, nil, nc, cellid
 objref synhge[250], shg[250], synmpge[250], spg[250], synpud[25], spd[25]
