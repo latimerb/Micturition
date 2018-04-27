@@ -1,0 +1,7 @@
+	0	MPGb	250
+	1	MPGaf	25
+	2	MPGef	25
+	3	HGb	250
+	4	HGaf	25
+	5	HGef	25
+	6	Pud	25

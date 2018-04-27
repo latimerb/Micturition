@@ -1,0 +1,93 @@
+NCELL = 625
+
+obfunc LoadMatrix() { local nrow,ncol localobj mat,datafile
+
+	nrow = $2
+
+	ncol = $3
+
+	datafile = new File()
+
+	datafile.ropen($s1)
+
+	mat = new Matrix()
+
+	mat.scanf(datafile,nrow,ncol)
+
+
+	datafile.close()
+
+	return mat
+
+}
+
+objref SynMatrix, WgtMatrix, ThrMatrix, DelMatrix
+
+SynMatrix = new Matrix()
+WgtMatrix = new Matrix()
+ThrMatrix = new Matrix()
+DelMatrix = new Matrix()
+
+SynMatrix = LoadMatrix(FileLocationStr_InternalSynConns, NCELL, NCELL)
+WgtMatrix = LoadMatrix(FileLocationStr_InternalWgtConns, NCELL, NCELL)
+ThrMatrix = LoadMatrix(FileLocationStr_InternalThrConns, NCELL, NCELL)
+DelMatrix = LoadMatrix(FileLocationStr_InternalDelConns, NCELL, NCELL)
+
+proc ConnectCells() { local i, j, cellgid, inputid, sourceid, targetid, synid localobj syn,cellid, nc, nclist, synlist
+
+	synlist = $o1
+	nclist = $o2
+	
+	{pc.barrier()}
+
+	for j = 0, NCELL-1 {
+
+		cellgid = j
+
+		if(!pc.gid_exists(cellgid)) { continue }
+
+		for i = 0, NCELL-1 {
+		
+			inputid = i
+			
+		    synid = SynMatrix.x[inputid][cellgid]
+			
+				sourceid = inputid
+
+				targetid = cellgid
+				//printf("Source ID: %i\n", inputid)
+				//printf("Target ID: %i\n", cellgid)
+
+				cellid = pc.gid2cell(targetid)
+
+				cellid.soma syn = new MyExp2Sid(0.9)    
+
+				syn.pregid = sourceid
+
+				syn.postgid = targetid
+			
+				cellid.synlist.append(syn) 
+
+				syn.srcid= sourceid
+
+				syn.destid= targetid
+			
+				nc = pc.gid_connect(sourceid,syn)
+
+				nc.weight = WgtMatrix.x[inputid][cellgid]
+
+				nc.delay = DelMatrix.x[inputid][cellgid]
+
+				nc.threshold = ThrMatrix.x[inputid][cellgid]
+				//printf("Target ID: %i\n", targetid)
+				printf("connecting cell %d to %d with weight %d delay %d\n",sourceid,targetid, nc.weight , nc.delay)
+			
+				synlist.append(syn)
+
+				nclist.append(nc)
+			
+		}
+
+	}
+
+}

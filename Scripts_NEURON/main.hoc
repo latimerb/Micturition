@@ -1,0 +1,249 @@
+{load_file("nrngui.hoc")}
+{load_file("BgGen.hoc")}
+{load_file("PUD_TEMPLATE.hoc")}
+{load_file("MPG_TEMPLATE.hoc")}
+{load_file("HG_TEMPLATE.hoc")}
+
+dt = 0.05
+steps_per_ms = 20
+v_init = -53.5
+tstop = 10000
+
+objref pc, cellslist, cell, nil, nc, cellid
+objref synhge[250], shg[250], synmpge[250], spg[250], synpud[25], spd[25]
+pc = new ParallelContext()
+
+strdef FileLocationStr_InternalSynConns
+FileLocationStr_InternalSynConns = "Data_InternalSynConns.txt"
+
+strdef FileLocationStr_InternalWgtConns
+FileLocationStr_InternalWgtConns = "Data_InternalWgtConns.txt"
+
+strdef FileLocationStr_InternalThrConns
+FileLocationStr_InternalThrConns = "Data_InternalThrConns.txt"
+
+strdef FileLocationStr_InternalDelConns
+FileLocationStr_InternalDelConns = "Data_InternalDelConns.txt"
+
+objref Internalnclist, InternalSynList, stims
+Internalnclist = new List()
+InternalSynList = new List()
+stims = new List()
+
+N_CELL = 625
+N_MPGb = 250
+N_MPGaf = 25
+N_MPGef = 25
+N_HGb = 250
+N_HGaf = 25
+N_HGef = 25
+N_Pud = 25
+
+cellslist = new List()
+objref bggen[N_CELL], bgnc[N_CELL], bgsyn[N_CELL]
+
+for (i = pc.id; i < N_CELL; i+= pc.nhost){
+	if (i < 300){
+		cell = new MPG()
+		///////// BACKGROUND NOISE ///////////
+		//$1 - frequency, $2 - noise start time
+		bggen[i] = new BgGen(5,0,tstop,5,dt,i)
+		cell.soma bgsyn[i] = new BG_ALL(0.9)
+		bgsyn[i].initW=5
+		bgnc[i] = new NetCon(bggen[i].intfire1,bgsyn[i],1,0,1)
+		//////////////////////////////////////
+	}else if (i > 299 && i < 600){
+		cell = new HG()
+		///////// BACKGROUND NOISE ///////////
+		//$1 - frequency, $2 - noise start time
+		bggen[i] = new BgGen(5,0,tstop,5,dt,i)
+		cell.soma bgsyn[i] = new BG_ALL(0.9)
+		bgsyn[i].initW=5
+		bgnc[i] = new NetCon(bggen[i].intfire1,bgsyn[i],1,0,1)
+		//////////////////////////////////////
+	}else {
+		cell = new PUD()
+		///////// BACKGROUND NOISE ///////////
+		//$1 - frequency, $2 - noise start time
+		bggen[i] = new BgGen(5,0,tstop,5,dt,i)
+		cell.soma bgsyn[i] = new BG_ALL(0.9)
+		bgsyn[i].initW=5
+		bgnc[i] = new NetCon(bggen[i].intfire1,bgsyn[i],1,0,1)
+		//////////////////////////////////////
+	}	
+	cellslist.append(cell)
+	pc.set_gid2node(i, pc.id)
+	nc = cell.connect2target(nil)  
+	nc.delay = 1
+	nc.weight = 1
+	pc.cell(i, nc)
+}
+/*
+///////////connection Stimulators to HGB/////////////////
+for m = 0, 249 {   
+	n=m+300
+	
+	
+	if(!pc.gid_exists(n)) { continue } 
+
+		cellid = pc.gid2cell(n)
+		cellid.soma synhge[m] = new Exp2Syn(0.9)
+		shg[m] = new NetStimh(0.9)
+
+		nc = new NetCon(shg[m], synhge[m])
+		nc.delay = 1
+		nc.weight = .1
+		nc.threshold = -10
+		Internalnclist.append(nc)
+		InternalSynList.append(synhge[m])
+		stims.append(shg[m])
+		
+	
+}
+
+///////////connection Stimulators to MPGB/////////////////
+for m = 0, 249 {   
+	
+	
+	if(!pc.gid_exists(m)) { continue } 
+
+		cellid = pc.gid2cell(m)
+		cellid.soma synmpge[m] = new Exp2Syn(0.9)
+		spg[m] = new NetStimp(0.9)
+		nc = new NetCon(spg[m], synmpge[m])
+		nc.delay = 1
+		nc.weight = .1
+		nc.threshold = -10
+		Internalnclist.append(nc)
+		InternalSynList.append(synmpge[m])
+		stims.append(spg[m])
+		
+}
+
+
+///////////connection Stimulators to PUD/////////////////
+for m = 0, 24 {   
+	
+	n = (m + 600)
+	
+	if(!pc.gid_exists(n)) { continue } 
+
+		cellid = pc.gid2cell(n)
+		cellid.soma synpud[m] = new Exp2Syn(0.9)
+		spd[m] = new NetStimpud(0.9)
+		nc = new NetCon(spd[m],synpud[m])
+		nc.delay = 1
+		nc.weight = 1
+		nc.threshold = -10
+		Internalnclist.append(nc)
+		InternalSynList.append(synpud[m])
+		stims.append(spd[m])
+		
+}
+*/
+
+printf("Connecting Cells")
+{load_file("InternalConnections.hoc")}
+
+ConnectCells(InternalSynList, Internalnclist)
+printf("Cells Connected")
+
+objref tvec, idvec 										// will be Vectors that record all spike times (tvec)
+														// and the corresponding id numbers of the cells that spiked (idvec)
+proc spikerecord() {local i localobj nc, nil
+
+	tvec = new Vector()
+	idvec = new Vector()
+	for i=0, cellslist.count-1 {
+	  nc = cellslist.object(i).connect2target(nil)
+	  nc.record(tvec, idvec, nc.srcgid)
+														// the Vector will continue to record spike times even after the NetCon has been destroyed
+	}
+}
+
+spikerecord()
+
+//Record voltage of the cells
+objref VolVec[N_CELL]
+objref VolList
+
+VolList = new List()
+vol_step= 0.5
+
+proc volv() { localobj cellid
+   for i = 0,N_CELL-1 {
+	  
+	  if(pc.gid_exists(i)){
+		cellid = pc.gid2cell(i)
+		VolVec[i] = new Vector()
+		VolVec[i].record(&cellid.soma.v(0.5),vol_step)
+		VolList.append(VolVec[i])
+	  }
+	  
+   }
+}
+
+volv()
+
+{load_file("function_TimeMonitor.hoc")}
+{pc.set_maxstep(10)}
+stdinit()
+{pc.psolve(tstop)}
+
+
+////////////////////////////
+
+//// Report simulation results////
+
+printf("Saving data")
+objref spikefile
+//sprint(fname,"%g/spikeraster",seed)
+spikefile = new File("Mict_data")
+
+if(pc.id==0){     //"wopen" once by node 0 to clear the contents of the file
+spikefile.wopen()
+spikefile.close()
+}
+
+proc spikefileout() { local i, rank
+	{pc.barrier()} // wait for all hosts to get to this point
+
+	for rank=0, pc.nhost-1 { // host 0 first, then 1, 2, etc.
+
+		if (rank==pc.id) {
+			for i=0, tvec.size-1 {
+				spikefile.aopen()                               //"aopen" to append data
+				spikefile.printf("%8.4f\t %d\n", tvec.x[i], idvec.x[i])
+				spikefile.close()
+			}
+		}
+	{pc.barrier()} // wait for all hosts to get to this point
+	}
+}
+
+spikefileout()
+
+// PROCEDURE TO SAVE VOLTAGE
+strdef vols
+objref f_vol[N_CELL]
+
+proc Save_Vol() { local z
+	for i = 0,N_CELL-1 {
+		
+		if(pc.gid_exists(i)){
+			f_vol[i] = new File()
+			sprint(vols,"../Data_Output/Voltage/Voltage_%d",i)
+			f_vol[i].wopen(vols)
+			z=VolList.index(VolVec[i])
+			VolList.o[z].printf(f_vol[i])
+			f_vol[i].close()
+		}
+		
+	}
+}
+
+Save_Vol()
+{pc.runworker()}
+{pc.done()}
+
+
